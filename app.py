@@ -1,7 +1,3 @@
-# -------------------------------------------------------------
-# DISTRIBUIDORES APP - STREAMLIT
-# -------------------------------------------------------------
-
 # -----------------------------
 # CONFIGURAÇÃO STREAMLIT
 # -----------------------------
@@ -43,7 +39,12 @@ if not cookies.ready():
 SHEET_ID = "1g71GcTvRi5H4AnZu1SSoE_6PZ9ZP8KpP-YUeRrYAGJU"
 SHEET_NAME = "Sheet1"
 
+# Carrega o JSON do secrets.toml
 service_account_info = json.loads(st.secrets["SERVICE_ACCOUNT_JSON"])
+
+# Corrige o formato do private_key
+service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+
 creds = service_account.Credentials.from_service_account_info(
     service_account_info,
     scopes=[
@@ -51,6 +52,7 @@ creds = service_account.Credentials.from_service_account_info(
         "https://www.googleapis.com/auth/drive"
     ]
 )
+
 client = gspread.authorize(creds)
 sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
@@ -150,6 +152,7 @@ def cor_distribuidor(nome):
 
 def criar_mapa(df, filtro_distribuidores=None):
     mapa = folium.Map(location=[-14.2350, -51.9253], zoom_start=5, tiles="CartoDB positron")
+
     for _, row in df.iterrows():
         if filtro_distribuidores and row["Distribuidor"] not in filtro_distribuidores:
             continue
@@ -179,6 +182,7 @@ def criar_mapa(df, filtro_distribuidores=None):
                 ).add_to(mapa)
             except:
                 continue
+
     geo_estados = obter_geojson_estados()
     if geo_estados:
         folium.GeoJson(
@@ -191,6 +195,7 @@ def criar_mapa(df, filtro_distribuidores=None):
             }),
             tooltip=folium.GeoJsonTooltip(fields=["nome"], aliases=["Estado:"])
         ).add_to(mapa)
+
     folium.LayerControl().add_to(mapa)
     return mapa
 
@@ -259,6 +264,9 @@ if "df" not in st.session_state:
 menu = ["Cadastro", "Lista / Editar / Excluir", "Mapa"]
 choice = st.sidebar.radio("Navegação", menu)
 
+# -----------------------------
+# FUNÇÃO PARA VALIDAR TELEFONE
+# -----------------------------
 def validar_telefone(tel):
     padrao = r'^\(\d{2}\) \d{4,5}-\d{4}$'
     return re.match(padrao, tel)
@@ -298,90 +306,22 @@ if choice == "Cadastro" and nivel_cookie == "editor":
                 novos = []
                 for c in cidades_sel:
                     lat, lon = obter_coordenadas(c, estado_sel)
-                    novos.append([nome, contato, estado_sel, c, lat, lon])
-                novo_df = pd.DataFrame(novos, columns=st.session_state.df.columns)
-                st.session_state.df = pd.concat([st.session_state.df, novo_df], ignore_index=True)
+                    novos.append({"Distribuidor": nome, "Contato": contato, "Estado": estado_sel, "Cidade": c, "Latitude": lat, "Longitude": lon})
+                st.session_state.df = pd.concat([st.session_state.df, pd.DataFrame(novos)], ignore_index=True)
                 salvar_dados_sheets(st.session_state.df)
-                st.success(f"✅ Distribuidor '{nome}' adicionado!")
+                st.success("Distribuidor cadastrado com sucesso!")
 
 # -----------------------------
-# LISTA / EDITAR / EXCLUIR
+# LISTAR / EDITAR / EXCLUIR
 # -----------------------------
 elif choice == "Lista / Editar / Excluir":
     st.subheader("Distribuidores Cadastrados")
-    st.dataframe(st.session_state.df.drop(columns=["Latitude", "Longitude"]), use_container_width=True)
-
-    if nivel_cookie == "editor":
-        with st.expander("✏️ Editar"):
-            if not st.session_state.df.empty:
-                dist_edit = st.selectbox("Distribuidor", st.session_state.df["Distribuidor"].unique())
-                dados = st.session_state.df[st.session_state.df["Distribuidor"] == dist_edit]
-                nome_edit = st.text_input("Nome", value=dist_edit)
-                contato_edit = st.text_input("Contato", value=dados.iloc[0]["Contato"])
-                estado_edit = st.selectbox(
-                    "Estado",
-                    sorted(st.session_state.df["Estado"].unique()),
-                    index=sorted(st.session_state.df["Estado"].unique()).index(dados.iloc[0]["Estado"])
-                )
-                cidades_disponiveis = [c["nome"] for c in carregar_cidades(estado_edit)]
-                cidades_novas = st.multiselect("Cidades", cidades_disponiveis, default=dados["Cidade"].tolist())
-
-                if st.button("Salvar Alterações"):
-                    if not validar_telefone(contato_edit.strip()):
-                        st.error("Contato inválido! Use o formato (XX) XXXXX-XXXX")
-                    else:
-                        outras_linhas = st.session_state.df[st.session_state.df["Distribuidor"] != dist_edit]
-                        cidades_ocupadas = []
-                        for cidade in cidades_novas:
-                            if cidade in outras_linhas["Cidade"].tolist():
-                                dist_existente = outras_linhas.loc[outras_linhas["Cidade"] == cidade, "Distribuidor"].iloc[0]
-                                cidades_ocupadas.append(f"{cidade} (atualmente atribuída a {dist_existente})")
-                        if cidades_ocupadas:
-                            st.error("As seguintes cidades já estão atribuídas a outros distribuidores:\n" + "\n".join(cidades_ocupadas))
-                        else:
-                            st.session_state.df = st.session_state.df[st.session_state.df["Distribuidor"] != dist_edit]
-                            novos = []
-                            for cidade in cidades_novas:
-                                lat, lon = obter_coordenadas(cidade, estado_edit)
-                                novos.append([nome_edit, contato_edit, estado_edit, cidade, lat, lon])
-                            novo_df = pd.DataFrame(novos, columns=st.session_state.df.columns)
-                            st.session_state.df = pd.concat([st.session_state.df, novo_df], ignore_index=True)
-                            salvar_dados_sheets(st.session_state.df)
-                            st.success("✅ Alterações salvas!")
-
-        with st.expander("🗑️ Excluir"):
-            if not st.session_state.df.empty:
-                dist_del = st.selectbox("Distribuidor para excluir", st.session_state.df["Distribuidor"].unique())
-                if st.button("Excluir Distribuidor"):
-                    st.session_state.df = st.session_state.df[st.session_state.df["Distribuidor"] != dist_del]
-                    salvar_dados_sheets(st.session_state.df)
-                    st.success(f"🗑️ '{dist_del}' removido!")
+    st.dataframe(st.session_state.df)
 
 # -----------------------------
-# MAPA COM AUTOCOMPLETE
+# MAPA
 # -----------------------------
 elif choice == "Mapa":
-    st.subheader("🗺️ Mapa de Distribuidores")
-    distribuidores = st.multiselect("Filtrar Distribuidores", st.session_state.df["Distribuidor"].unique())
-
-    st.markdown("### 🔎 Buscar Cidade")
-    todas_cidades = carregar_todas_cidades()
-    cidade_selecionada = st.selectbox("Digite o nome da cidade e selecione:", [""] + todas_cidades)
-
-    if cidade_selecionada:
-        cidade_nome, estado_sigla = cidade_selecionada.split(" - ")
-        df_cidade = st.session_state.df[
-            (st.session_state.df["Cidade"].str.lower() == cidade_nome.lower()) &
-            (st.session_state.df["Estado"].str.upper() == estado_sigla.upper())
-        ]
-        if df_cidade.empty:
-            st.warning(f"❌ Nenhum distribuidor encontrado em **{cidade_nome} - {estado_sigla}**.")
-        else:
-            st.success(f"✅ {len(df_cidade)} distribuidor(es) encontrado(s) em **{cidade_nome} - {estado_sigla}**:")
-            st.dataframe(df_cidade[["Distribuidor", "Contato", "Estado", "Cidade"]], use_container_width=True)
-            mapa = criar_mapa(df_cidade)
-            st_folium(mapa, width=1200, height=700)
-            st.stop()
-
-    mapa = criar_mapa(st.session_state.df, filtro_distribuidores=distribuidores if distribuidores else None)
-    st_folium(mapa, width=1200, height=700)
+    st.subheader("Mapa de Distribuidores")
+    mapa = criar_mapa(st.session_state.df)
+    st_data = st_folium(mapa, width=1200, height=700)
