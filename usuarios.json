@@ -1,0 +1,10 @@
+{
+  "admin": {
+    "senha": "$2b$12$XxOwNORzEONXdX.hLGYB8uZ5TitQv3NdXGO6EoFLWJpclY8//kKIe",
+    "nivel": "editor"
+  },
+  "ecos": {
+    "senha": "$2b$12$ygjAQ7TDgFF381orV6r/PObXHIrQobZtJDDz8d5ag3j.gm31zS1Rm",
+    "nivel": "visualizador"
+  }
+}
