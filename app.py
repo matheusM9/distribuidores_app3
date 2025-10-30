@@ -1,3 +1,7 @@
+# -------------------------------------------------------------
+# DISTRIBUIDORES APP - STREAMLIT
+# -------------------------------------------------------------
+
 # -----------------------------
 # CONFIGURAÇÃO STREAMLIT
 # -----------------------------
@@ -34,14 +38,14 @@ if not cookies.ready():
     st.stop()
 
 # -----------------------------
-# GOOGLE SHEETS
+# GOOGLE SHEETS (via Streamlit Secrets)
 # -----------------------------
 SHEET_ID = "1g71GcTvRi5H4AnZu1SSoE_6PZ9ZP8KpP-YUeRrYAGJU"
 SHEET_NAME = "Sheet1"
-CRED_JSON = "service_account.json"
 
-creds = service_account.Credentials.from_service_account_file(
-    CRED_JSON,
+service_account_info = json.loads(st.secrets["SERVICE_ACCOUNT_JSON"])
+creds = service_account.Credentials.from_service_account_info(
+    service_account_info,
     scopes=[
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
@@ -50,7 +54,9 @@ creds = service_account.Credentials.from_service_account_file(
 client = gspread.authorize(creds)
 sheet = client.open_by_key(SHEET_ID).worksheet(SHEET_NAME)
 
-
+# -----------------------------
+# FUNÇÕES GOOGLE SHEETS
+# -----------------------------
 def ler_dados_sheets():
     df = get_as_dataframe(sheet, evaluate_formulas=True).fillna("")
     for col in ["Distribuidor", "Contato", "Estado", "Cidade", "Latitude", "Longitude"]:
@@ -58,13 +64,11 @@ def ler_dados_sheets():
             df[col] = ""
     return df[["Distribuidor", "Contato", "Estado", "Cidade", "Latitude", "Longitude"]]
 
-
 def salvar_dados_sheets(df):
     df = df.dropna(subset=["Distribuidor", "Contato", "Estado", "Cidade"])
     df = df[df["Distribuidor"].astype(str).str.strip() != ""]
     sheet.clear()
     set_with_dataframe(sheet, df, include_index=False, include_column_header=True)
-
 
 # -----------------------------
 # FUNÇÕES AUXILIARES
@@ -75,13 +79,11 @@ def carregar_estados():
     resp = requests.get(url)
     return sorted(resp.json(), key=lambda e: e['nome'])
 
-
 @st.cache_data
 def carregar_cidades(uf):
     url = f"https://servicodados.ibge.gov.br/api/v1/localidades/estados/{uf}/municipios"
     resp = requests.get(url)
     return sorted(resp.json(), key=lambda c: c['nome'])
-
 
 @st.cache_data
 def carregar_todas_cidades():
@@ -96,7 +98,6 @@ def carregar_todas_cidades():
                 cidades.append(f"{c['nome']} - {uf}")
     return sorted(cidades)
 
-
 def obter_coordenadas(cidade, estado):
     geolocator = Nominatim(user_agent="distribuidores_app", timeout=5)
     try:
@@ -107,7 +108,6 @@ def obter_coordenadas(cidade, estado):
             return "", ""
     except (GeocoderTimedOut, GeocoderUnavailable):
         return "", ""
-
 
 @st.cache_data
 def obter_geojson_cidade(cidade, estado_sigla):
@@ -124,10 +124,8 @@ def obter_geojson_cidade(cidade, estado_sigla):
         pass
     return None
 
-
 @st.cache_data
 def obter_geojson_estados():
-    """Carrega as divisas dos estados com destaque visual."""
     url = "https://servicodados.ibge.gov.br/api/v2/malhas/?formato=application/vnd.geo+json&qualidade=simplificada&incluir=estados"
     try:
         resp = requests.get(url, timeout=10)
@@ -145,16 +143,13 @@ def obter_geojson_estados():
         pass
     return None
 
-
 def cor_distribuidor(nome):
     h = abs(hash(nome)) % 0xAAAAAA
     h += 0x111111
     return f"#{h:06X}"
 
-
 def criar_mapa(df, filtro_distribuidores=None):
     mapa = folium.Map(location=[-14.2350, -51.9253], zoom_start=5, tiles="CartoDB positron")
-
     for _, row in df.iterrows():
         if filtro_distribuidores and row["Distribuidor"] not in filtro_distribuidores:
             continue
@@ -184,7 +179,6 @@ def criar_mapa(df, filtro_distribuidores=None):
                 ).add_to(mapa)
             except:
                 continue
-
     geo_estados = obter_geojson_estados()
     if geo_estados:
         folium.GeoJson(
@@ -197,16 +191,13 @@ def criar_mapa(df, filtro_distribuidores=None):
             }),
             tooltip=folium.GeoJsonTooltip(fields=["nome"], aliases=["Estado:"])
         ).add_to(mapa)
-
     folium.LayerControl().add_to(mapa)
     return mapa
-
 
 # -----------------------------
 # LOGIN PERSISTENTE
 # -----------------------------
 USUARIOS_FILE = "usuarios.json"
-
 
 def init_usuarios():
     try:
@@ -220,7 +211,6 @@ def init_usuarios():
         with open(USUARIOS_FILE, "w") as f:
             json.dump(usuarios, f, indent=4)
     return usuarios
-
 
 usuarios = init_usuarios()
 usuario_cookie = cookies.get("usuario", "")
@@ -269,9 +259,6 @@ if "df" not in st.session_state:
 menu = ["Cadastro", "Lista / Editar / Excluir", "Mapa"]
 choice = st.sidebar.radio("Navegação", menu)
 
-# -----------------------------
-# FUNÇÃO PARA VALIDAR TELEFONE
-# -----------------------------
 def validar_telefone(tel):
     padrao = r'^\(\d{2}\) \d{4,5}-\d{4}$'
     return re.match(padrao, tel)
