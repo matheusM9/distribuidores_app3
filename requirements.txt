@@ -1,8 +1,11 @@
 streamlit
-gspread
-gspread_dataframe
-google-auth
 pandas
 folium
 streamlit-folium
 geopy
+requests
+bcrypt
+gspread
+gspread-dataframe
+google-auth
+streamlit-cookies-manager
