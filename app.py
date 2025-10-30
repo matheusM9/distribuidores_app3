@@ -42,8 +42,7 @@ SHEET_NAME = "Sheet1"
 # Carrega o JSON do secrets.toml
 service_account_info = json.loads(st.secrets["SERVICE_ACCOUNT_JSON"])
 
-# Corrige o formato do private_key
-service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+
 
 creds = service_account.Credentials.from_service_account_info(
     service_account_info,
