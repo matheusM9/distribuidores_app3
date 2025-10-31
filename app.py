@@ -22,6 +22,7 @@ from gspread_dataframe import get_as_dataframe, set_with_dataframe
 from google.oauth2 import service_account
 from streamlit_cookies_manager import EncryptedCookieManager
 import re
+import os
 
 # -----------------------------
 # COOKIES (LOGIN PERSISTENTE)
@@ -34,20 +35,26 @@ if not cookies.ready():
     st.stop()
 
 # -----------------------------
-# GOOGLE SHEETS (via Streamlit Secrets)
+# GOOGLE SHEETS (via variável Render)
 # -----------------------------
 SHEET_ID = "1g71GcTvRi5H4AnZu1SSoE_6PZ9ZP8KpP-YUeRrYAGJU"
 SHEET_NAME = "Sheet1"
 
-# Carrega o JSON diretamente do secrets
-import os
-service_account_info = json.loads(os.environ["SERVICE_ACCOUNT_JSON"])
+# Lê o JSON do Render (Environment Variable)
+service_account_json = os.getenv("SERVICE_ACCOUNT_JSON")
 
-# Corrige quebras de linha na chave privada
-service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+if not service_account_json:
+    st.error("⚠️ Variável SERVICE_ACCOUNT_JSON não configurada no Render.")
+    st.stop()
 
+# Converte string JSON em dicionário
+service_account_info = json.loads(service_account_json)
 
+# Corrige quebras de linha na private_key
+if "\\n" in service_account_info["private_key"]:
+    service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
 
+# Autentica no Google Sheets
 creds = service_account.Credentials.from_service_account_info(
     service_account_info,
     scopes=[
@@ -155,7 +162,6 @@ def cor_distribuidor(nome):
 
 def criar_mapa(df, filtro_distribuidores=None):
     mapa = folium.Map(location=[-14.2350, -51.9253], zoom_start=5, tiles="CartoDB positron")
-
     for _, row in df.iterrows():
         if filtro_distribuidores and row["Distribuidor"] not in filtro_distribuidores:
             continue
@@ -268,7 +274,7 @@ menu = ["Cadastro", "Lista / Editar / Excluir", "Mapa"]
 choice = st.sidebar.radio("Navegação", menu)
 
 # -----------------------------
-# FUNÇÃO PARA VALIDAR TELEFONE
+# VALIDAÇÃO TELEFONE
 # -----------------------------
 def validar_telefone(tel):
     padrao = r'^\(\d{2}\) \d{4,5}-\d{4}$'
