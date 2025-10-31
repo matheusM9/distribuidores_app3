@@ -40,7 +40,8 @@ SHEET_ID = "1g71GcTvRi5H4AnZu1SSoE_6PZ9ZP8KpP-YUeRrYAGJU"
 SHEET_NAME = "Sheet1"
 
 # Carrega o JSON diretamente do secrets
-service_account_info = json.loads(st.secrets["SERVICE_ACCOUNT"]["SERVICE_ACCOUNT_JSON"])
+import os
+service_account_info = json.loads(os.environ["SERVICE_ACCOUNT_JSON"])
 
 # Corrige quebras de linha na chave privada
 service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
